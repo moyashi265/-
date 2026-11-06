@@ -73,7 +73,7 @@
   <div id="modal-intake" class="fixed inset-0 bg-black/50 backdrop-blur-sm hidden flex items-center justify-center p-4 z-50">
     <div class="bg-white rounded-2xl max-w-sm w-full p-6 shadow-2xl">
       <h3 class="text-lg font-bold text-gray-800 mb-1" id="modal-intake-title">入荷登録</h3>
-      <p class="text-xs text-gray-500 mb-4">入荷数量を入力してください</p>
+      <p class="text-xs text-gray-500 mb-4">入荷数量を確認・変更してください</p>
       <div class="space-y-4">
         <div>
           <label class="block text-xs font-bold text-gray-600 mb-1">入荷数</label>
@@ -86,7 +86,7 @@
       </div>
       <div class="mt-6 flex gap-2">
         <button onclick="closeIntakeModal()" class="flex-1 py-2 bg-gray-100 text-gray-600 text-sm font-bold rounded-lg hover:bg-gray-200">キャンセル</button>
-        <button onclick="submitIntake()" class="flex-1 py-2 bg-blue-600 text-white text-sm font-bold rounded-lg hover:bg-blue-700">確定</button>
+        <button onclick="submitIntake()" class="flex-1 py-2 bg-blue-600 text-white text-sm font-bold rounded-lg hover:bg-blue-700">入荷する</button>
       </div>
     </div>
   </div>
@@ -194,7 +194,7 @@
               発注する
             </button>
             <button onclick="openIntakeModal('${item.name}')" class="py-2.5 bg-blue-50 text-blue-600 hover:bg-blue-100 font-bold text-xs rounded-xl transition">
-              入荷
+              入庫(入荷)
             </button>
           </div>
         `;
@@ -243,7 +243,9 @@
       return `${y}/${m}/${d}`;
     }
 
+    // 出庫ボタンの確認処理
     function handleQuickDecrement(itemName) {
+      if (!confirm(`【出庫確認】\n「${itemName}」を 1個出庫しますか？`)) return;
       logs.push({
         id: Date.now(),
         date: getTodayString(),
@@ -257,7 +259,9 @@
       renderLogs();
     }
 
+    // 発注ボタンの確認処理
     function handleOrdering(itemName) {
+      if (!confirm(`【発注確認】\n「${itemName}」を発注しますか？`)) return;
       logs.push({
         id: Date.now(),
         date: getTodayString(),
@@ -271,9 +275,11 @@
       renderLogs();
     }
 
+    // 入庫（入荷）ボタンの確認＆モーダル表示
     function openIntakeModal(itemName) {
       currentTargetItem = itemsMaster.find(i => i.name === itemName);
-      document.getElementById('modal-intake-title').innerText = `${itemName} の入荷`;
+      if (!confirm(`【入庫確認】\n「${itemName}」の入庫（入荷）登録を行いますか？`)) return;
+      document.getElementById('modal-intake-title').innerText = `${itemName} の入庫登録`;
       document.getElementById('intake-qty-input').value = currentTargetItem ? currentTargetItem.defaultOrderQty : 10;
       document.getElementById('modal-intake').classList.remove('hidden');
     }
