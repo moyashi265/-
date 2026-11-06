@@ -73,7 +73,7 @@
   <div id="modal-intake" class="fixed inset-0 bg-black/50 backdrop-blur-sm hidden flex items-center justify-center p-4 z-50">
     <div class="bg-white rounded-2xl max-w-sm w-full p-6 shadow-2xl">
       <h3 class="text-lg font-bold text-gray-800 mb-1" id="modal-intake-title">入荷登録</h3>
-      <p class="text-xs text-gray-500 mb-4">入荷数量を入力してください（標準発注数量がセットされています）</p>
+      <p class="text-xs text-gray-500 mb-4">入荷数量を入力してください</p>
       <div class="space-y-4">
         <div>
           <label class="block text-xs font-bold text-gray-600 mb-1">入荷数</label>
@@ -95,6 +95,22 @@
   <div id="modal-master" class="fixed inset-0 bg-black/50 backdrop-blur-sm hidden flex items-center justify-center p-4 z-50">
     <div class="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl max-h-[90vh] overflow-y-auto">
       <h3 class="text-lg font-bold text-gray-800 mb-4">商品マスタ設定</h3>
+      
+      <!-- 新規商品追加エリア -->
+      <div class="bg-blue-50 p-3 rounded-xl mb-4 border border-blue-100">
+        <div class="text-xs font-bold text-blue-800 mb-2">＋ 新しい商品を追加</div>
+        <div class="grid grid-cols-2 gap-2 mb-2">
+          <input type="text" id="new-item-name" placeholder="商品名" class="p-2 border rounded text-xs">
+          <input type="text" id="new-item-cat" placeholder="カテゴリ (例: 資材)" class="p-2 border rounded text-xs">
+        </div>
+        <div class="grid grid-cols-2 gap-2 mb-2">
+          <input type="number" id="new-item-reorder" placeholder="発注点" class="p-2 border rounded text-xs">
+          <input type="number" id="new-item-default" placeholder="標準発注数" class="p-2 border rounded text-xs">
+        </div>
+        <button onclick="addNewMasterItem()" class="w-full py-1.5 bg-blue-600 text-white font-bold text-xs rounded-lg hover:bg-blue-700">追加する</button>
+      </div>
+
+      <div class="text-xs font-bold text-gray-500 mb-2">登録済み商品一覧（編集・削除）</div>
       <div id="master-items-list" class="space-y-3 mb-6">
         <!-- マスタ動的生成 -->
       </div>
@@ -103,7 +119,6 @@
   </div>
 
   <script>
-    // 初期商品マスタ
     let itemsMaster = JSON.parse(localStorage.getItem('app_items_master')) || [
       { id: 1, name: 'プラスチックグローブ', category: '保護具', reorderPoint: 10, defaultOrderQty: 50 },
       { id: 2, name: 'つなぎL', category: '作業着', reorderPoint: 5, defaultOrderQty: 10 },
@@ -114,7 +129,6 @@
       { id: 7, name: 'カッター替刃', category: '工具・備品', reorderPoint: 5, defaultOrderQty: 20 }
     ];
 
-    // 初期ログ
     let logs = JSON.parse(localStorage.getItem('app_inventory_logs')) || [
       { id: 1, date: '2026/11/01', itemName: 'プラスチックグローブ', qty: 20, type: '入荷', user: '担当A' },
       { id: 2, date: '2026/11/01', itemName: 'つなぎL', qty: 10, type: '入荷', user: '担当A' },
@@ -311,6 +325,11 @@
     }
 
     function openMasterModal() {
+      renderMasterList();
+      document.getElementById('modal-master').classList.remove('hidden');
+    }
+
+    function renderMasterList() {
       const list = document.getElementById('master-items-list');
       list.innerHTML = '';
       itemsMaster.forEach((item, index) => {
@@ -318,18 +337,56 @@
         div.className = "flex items-center gap-2 p-2 bg-gray-50 rounded-lg text-xs";
         div.innerHTML = `
           <input type="text" value="${item.name}" onchange="updateMaster(${index}, 'name', this.value)" class="flex-1 p-1.5 border rounded font-bold">
-          <input type="number" value="${item.reorderPoint}" onchange="updateMaster(${index}, 'reorderPoint', parseInt(this.value,10))" class="w-16 p-1.5 border rounded text-right" title="発注点">
-          <input type="number" value="${item.defaultOrderQty}" onchange="updateMaster(${index}, 'defaultOrderQty', parseInt(this.value,10))" class="w-16 p-1.5 border rounded text-right" title="標準発注数">
+          <input type="number" value="${item.reorderPoint}" onchange="updateMaster(${index}, 'reorderPoint', parseInt(this.value,10))" class="w-14 p-1.5 border rounded text-right" title="発注点">
+          <input type="number" value="${item.defaultOrderQty}" onchange="updateMaster(${index}, 'defaultOrderQty', parseInt(this.value,10))" class="w-14 p-1.5 border rounded text-right" title="標準発注数">
+          <button onclick="deleteMasterItem(${index})" class="text-red-500 hover:text-red-700 font-bold px-1">✕</button>
         `;
         list.appendChild(div);
       });
-      document.getElementById('modal-master').classList.remove('hidden');
+    }
+
+    function addNewMasterItem() {
+      const name = document.getElementById('new-item-name').value.trim();
+      const category = document.getElementById('new-item-cat').value.trim() || '未分類';
+      const reorderPoint = parseInt(document.getElementById('new-item-reorder').value, 10) || 5;
+      const defaultOrderQty = parseInt(document.getElementById('new-item-default').value, 10) || 10;
+
+      if (!name) {
+        alert('商品名を入力してください');
+        return;
+      }
+
+      itemsMaster.push({
+        id: Date.now(),
+        name: name,
+        category: category,
+        reorderPoint: reorderPoint,
+        defaultOrderQty: defaultOrderQty
+      });
+
+      saveData();
+      renderItems();
+      renderMasterList();
+
+      document.getElementById('new-item-name').value = '';
+      document.getElementById('new-item-cat').value = '';
+      document.getElementById('new-item-reorder').value = '';
+      document.getElementById('new-item-default').value = '';
     }
 
     function updateMaster(index, key, val) {
       itemsMaster[index][key] = val;
       saveData();
       renderItems();
+    }
+
+    function deleteMasterItem(index) {
+      if (confirm(`「${itemsMaster[index].name}」を削除しますか？`)) {
+        itemsMaster.splice(index, 1);
+        saveData();
+        renderItems();
+        renderMasterList();
+      }
     }
 
     function closeMasterModal() {
@@ -348,7 +405,6 @@
       link.click();
     }
 
-    // 初期化実行
     renderItems();
     renderLogs();
   </script>
