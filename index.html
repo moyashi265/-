@@ -1,0 +1,356 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>簡易在庫管理システム</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body { background-color: #f3f4f6; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+    .badge-ok { background-color: #d1fae5; color: #065f46; }
+    .badge-alert { background-color: #fee2e2; color: #991b1b; border: 1px solid #f87171; }
+    .badge-ordering { background-color: #dc2626; color: #ffffff; font-weight: bold; }
+  </style>
+</head>
+<body class="p-4 md:p-8">
+  <div class="max-w-4xl mx-auto">
+    <!-- 上部警告バナー -->
+    <div id="alert-banner" class="hidden mb-6 p-4 rounded-xl bg-red-600 text-white shadow-lg flex items-center justify-between">
+      <div class="flex items-center space-x-3">
+        <svg class="w-6 h-6 animate-bounce" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
+        <span class="font-bold text-lg" id="alert-text">発注点以下の商品があります！</span>
+      </div>
+      <span class="text-xs bg-white text-red-600 font-bold px-2 py-1 rounded">要確認</span>
+    </div>
+
+    <!-- ヘッダー -->
+    <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4 bg-white p-6 rounded-2xl shadow-sm">
+      <div>
+        <h1 class="text-2xl font-bold text-gray-800">在庫管理ダッシュボード</h1>
+        <p class="text-xs text-gray-500 mt-1">ワンタップ出庫・自動ステータス更新対応</p>
+      </div>
+      <div class="flex gap-2">
+        <button onclick="openMasterModal()" class="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm font-semibold rounded-lg transition">マスタ編集</button>
+        <button onclick="exportCSV()" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold rounded-lg transition shadow-sm">ログCSV出力</button>
+      </div>
+    </div>
+
+    <!-- タブ切り替え -->
+    <div class="flex border-b border-gray-200 mb-6 bg-white rounded-t-xl px-4 pt-2">
+      <button id="tab-btn-items" onclick="switchTab('items')" class="py-3 px-6 font-bold text-sm border-b-2 border-blue-600 text-blue-600 transition">現在庫一覧</button>
+      <button id="tab-btn-logs" onclick="switchTab('logs')" class="py-3 px-6 font-bold text-sm border-b-2 border-transparent text-gray-500 hover:text-gray-700 transition">入出庫ログ</button>
+    </div>
+
+    <!-- 1. 現在庫一覧タブ -->
+    <div id="tab-content-items" class="space-y-4">
+      <div id="item-cards-container" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <!-- 動的カード挿入エリア -->
+      </div>
+    </div>
+
+    <!-- 2. 入出庫ログタブ -->
+    <div id="tab-content-logs" class="hidden bg-white rounded-2xl shadow-sm p-4 overflow-x-auto">
+      <table class="w-full text-left border-collapse">
+        <thead>
+          <tr class="border-b border-gray-200 text-xs font-bold text-gray-500 bg-gray-50">
+            <th class="p-3">日付</th>
+            <th class="p-3">商品名</th>
+            <th class="p-3 text-center">区分</th>
+            <th class="p-3 text-right">数量</th>
+            <th class="p-3">担当者</th>
+            <th class="p-3 text-center">操作</th>
+          </tr>
+        </thead>
+        <tbody id="log-table-body" class="text-sm divide-y divide-gray-100">
+          <!-- ログ動的表示 -->
+        </tbody>
+      </table>
+    </div>
+
+  </div>
+
+  <!-- 入荷入力モーダル -->
+  <div id="modal-intake" class="fixed inset-0 bg-black/50 backdrop-blur-sm hidden flex items-center justify-center p-4 z-50">
+    <div class="bg-white rounded-2xl max-w-sm w-full p-6 shadow-2xl">
+      <h3 class="text-lg font-bold text-gray-800 mb-1" id="modal-intake-title">入荷登録</h3>
+      <p class="text-xs text-gray-500 mb-4">入荷数量を入力してください（標準発注数量がセットされています）</p>
+      <div class="space-y-4">
+        <div>
+          <label class="block text-xs font-bold text-gray-600 mb-1">入荷数</label>
+          <input type="number" id="intake-qty-input" class="w-full border border-gray-300 rounded-lg p-2 text-right text-lg font-bold focus:ring-2 focus:ring-blue-500 focus:outline-none" min="1">
+        </div>
+        <div>
+          <label class="block text-xs font-bold text-gray-600 mb-1">担当者</label>
+          <input type="text" id="intake-user-input" value="担当A" class="w-full border border-gray-300 rounded-lg p-2 text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none">
+        </div>
+      </div>
+      <div class="mt-6 flex gap-2">
+        <button onclick="closeIntakeModal()" class="flex-1 py-2 bg-gray-100 text-gray-600 text-sm font-bold rounded-lg hover:bg-gray-200">キャンセル</button>
+        <button onclick="submitIntake()" class="flex-1 py-2 bg-blue-600 text-white text-sm font-bold rounded-lg hover:bg-blue-700">確定</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- マスタ編集モーダル -->
+  <div id="modal-master" class="fixed inset-0 bg-black/50 backdrop-blur-sm hidden flex items-center justify-center p-4 z-50">
+    <div class="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl max-h-[90vh] overflow-y-auto">
+      <h3 class="text-lg font-bold text-gray-800 mb-4">商品マスタ設定</h3>
+      <div id="master-items-list" class="space-y-3 mb-6">
+        <!-- マスタ動的生成 -->
+      </div>
+      <button onclick="closeMasterModal()" class="w-full py-2 bg-gray-800 text-white font-bold text-sm rounded-lg hover:bg-gray-900">閉じる</button>
+    </div>
+  </div>
+
+  <script>
+    // 初期商品マスタ
+    let itemsMaster = JSON.parse(localStorage.getItem('app_items_master')) || [
+      { id: 1, name: 'プラスチックグローブ', category: '保護具', reorderPoint: 10, defaultOrderQty: 50 },
+      { id: 2, name: 'つなぎL', category: '作業着', reorderPoint: 5, defaultOrderQty: 10 },
+      { id: 3, name: 'つなぎLL', category: '作業着', reorderPoint: 5, defaultOrderQty: 10 },
+      { id: 4, name: 'つなぎ3L', category: '作業着', reorderPoint: 5, defaultOrderQty: 10 },
+      { id: 5, name: 'ピンクテープ', category: '資材', reorderPoint: 10, defaultOrderQty: 30 },
+      { id: 6, name: 'ミドリテープ', category: '資材', reorderPoint: 10, defaultOrderQty: 30 },
+      { id: 7, name: 'カッター替刃', category: '工具・備品', reorderPoint: 5, defaultOrderQty: 20 }
+    ];
+
+    // 初期ログ
+    let logs = JSON.parse(localStorage.getItem('app_inventory_logs')) || [
+      { id: 1, date: '2026/11/01', itemName: 'プラスチックグローブ', qty: 20, type: '入荷', user: '担当A' },
+      { id: 2, date: '2026/11/01', itemName: 'つなぎL', qty: 10, type: '入荷', user: '担当A' },
+      { id: 3, date: '2026/11/02', itemName: 'プラスチックグローブ', qty: 12, type: '出庫', user: '担当B' }
+    ];
+
+    let currentTargetItem = null;
+
+    function saveData() {
+      localStorage.setItem('app_items_master', JSON.stringify(itemsMaster));
+      localStorage.setItem('app_inventory_logs', JSON.stringify(logs));
+    }
+
+    function calculateStock(itemName) {
+      const intakeSum = logs.filter(l => l.itemName === itemName && l.type === '入荷').reduce((sum, l) => sum + l.qty, 0);
+      const outSum = logs.filter(l => l.itemName === itemName && l.type === '出庫').reduce((sum, l) => sum + l.qty, 0);
+      return intakeSum - outSum;
+    }
+
+    function getItemStatus(item) {
+      const orderLogsCount = logs.filter(l => l.itemName === item.name && l.type === '発注').length;
+      const intakeLogsCount = logs.filter(l => l.itemName === item.name && l.type === '入荷').length;
+      if (orderLogsCount > intakeLogsCount) return '発注中';
+      const stock = calculateStock(item.name);
+      if (stock <= item.reorderPoint) return '要発注';
+      return '適正';
+    }
+
+    function renderItems() {
+      const container = document.getElementById('item-cards-container');
+      container.innerHTML = '';
+      let hasAlert = false;
+
+      itemsMaster.forEach(item => {
+        const stock = calculateStock(item.name);
+        const status = getItemStatus(item);
+
+        if (status === '要発注' || status === '発注中') hasAlert = true;
+
+        let badgeClass = 'badge-ok';
+        if (status === '要発注') badgeClass = 'badge-alert';
+        if (status === '発注中') badgeClass = 'badge-ordering';
+
+        const card = document.createElement('div');
+        card.className = "bg-white p-5 rounded-2xl shadow-sm border border-gray-100 flex flex-col justify-between hover:shadow-md transition";
+        card.innerHTML = `
+          <div>
+            <div class="flex justify-between items-start mb-2">
+              <span class="text-xs px-2 py-1 bg-gray-100 text-gray-600 rounded-md font-semibold">${item.category}</span>
+              <span class="text-xs px-2.5 py-1 rounded-full font-bold ${badgeClass}">${status}</span>
+            </div>
+            <h3 class="text-lg font-bold text-gray-800 mb-1">${item.name}</h3>
+            <div class="flex items-baseline gap-2 mb-4">
+              <span class="text-3xl font-extrabold text-gray-900">${stock}</span>
+              <span class="text-xs text-gray-400">/ 発注点 ${item.reorderPoint}</span>
+            </div>
+          </div>
+          <div class="grid grid-cols-3 gap-2">
+            <button onclick="handleQuickDecrement('${item.name}')" class="py-2.5 bg-rose-50 text-rose-600 hover:bg-rose-100 font-bold text-xs rounded-xl transition flex items-center justify-center gap-1">
+              -1 個出庫
+            </button>
+            <button onclick="handleOrdering('${item.name}')" class="py-2.5 bg-amber-50 text-amber-600 hover:bg-amber-100 font-bold text-xs rounded-xl transition">
+              発注する
+            </button>
+            <button onclick="openIntakeModal('${item.name}')" class="py-2.5 bg-blue-50 text-blue-600 hover:bg-blue-100 font-bold text-xs rounded-xl transition">
+              入荷
+            </button>
+          </div>
+        `;
+        container.appendChild(card);
+      });
+
+      const alertBanner = document.getElementById('alert-banner');
+      if (hasAlert) {
+        alertBanner.classList.remove('hidden');
+      } else {
+        alertBanner.classList.add('hidden');
+      }
+    }
+
+    function renderLogs() {
+      const tbody = document.getElementById('log-table-body');
+      tbody.innerHTML = '';
+      const sortedLogs = [...logs].reverse();
+      sortedLogs.forEach(log => {
+        const tr = document.createElement('tr');
+        tr.className = "hover:bg-gray-50 transition";
+        let typeBadge = "text-gray-600 bg-gray-100";
+        if (log.type === '出庫') typeBadge = "text-rose-600 bg-rose-50 font-bold";
+        if (log.type === '入荷') typeBadge = "text-blue-600 bg-blue-50 font-bold";
+        if (log.type === '発注') typeBadge = "text-amber-600 bg-amber-50 font-bold";
+
+        tr.innerHTML = `
+          <td class="p-3 text-gray-500 font-mono text-xs">${log.date}</td>
+          <td class="p-3 font-semibold text-gray-800">${log.itemName}</td>
+          <td class="p-3 text-center"><span class="px-2 py-0.5 rounded text-xs ${typeBadge}">${log.type}</span></td>
+          <td class="p-3 text-right font-mono font-bold">${log.qty || '-'}</td>
+          <td class="p-3 text-gray-600 text-xs">${log.user}</td>
+          <td class="p-3 text-center">
+            <button onclick="deleteLog(${log.id})" class="text-xs text-gray-400 hover:text-red-500">削除</button>
+          </td>
+        `;
+        tbody.appendChild(tr);
+      });
+    }
+
+    function getTodayString() {
+      const now = new Date();
+      const y = now.getFullYear();
+      const m = String(now.getMonth() + 1).padStart(2, '0');
+      const d = String(now.getDate()).padStart(2, '0');
+      return `${y}/${m}/${d}`;
+    }
+
+    function handleQuickDecrement(itemName) {
+      logs.push({
+        id: Date.now(),
+        date: getTodayString(),
+        itemName: itemName,
+        qty: 1,
+        type: '出庫',
+        user: '担当者'
+      });
+      saveData();
+      renderItems();
+      renderLogs();
+    }
+
+    function handleOrdering(itemName) {
+      logs.push({
+        id: Date.now(),
+        date: getTodayString(),
+        itemName: itemName,
+        qty: 0,
+        type: '発注',
+        user: '担当者'
+      });
+      saveData();
+      renderItems();
+      renderLogs();
+    }
+
+    function openIntakeModal(itemName) {
+      currentTargetItem = itemsMaster.find(i => i.name === itemName);
+      document.getElementById('modal-intake-title').innerText = `${itemName} の入荷`;
+      document.getElementById('intake-qty-input').value = currentTargetItem ? currentTargetItem.defaultOrderQty : 10;
+      document.getElementById('modal-intake').classList.remove('hidden');
+    }
+
+    function closeIntakeModal() {
+      document.getElementById('modal-intake').classList.add('hidden');
+    }
+
+    function submitIntake() {
+      const qty = parseInt(document.getElementById('intake-qty-input').value, 10);
+      const user = document.getElementById('intake-user-input').value || '担当者';
+      if (qty > 0 && currentTargetItem) {
+        logs.push({
+          id: Date.now(),
+          date: getTodayString(),
+          itemName: currentTargetItem.name,
+          qty: qty,
+          type: '入荷',
+          user: user
+        });
+        saveData();
+        renderItems();
+        renderLogs();
+        closeIntakeModal();
+      }
+    }
+
+    function deleteLog(id) {
+      if (confirm('このログを削除しますか？')) {
+        logs = logs.filter(l => l.id !== id);
+        saveData();
+        renderItems();
+        renderLogs();
+      }
+    }
+
+    function switchTab(tab) {
+      if (tab === 'items') {
+        document.getElementById('tab-content-items').classList.remove('hidden');
+        document.getElementById('tab-content-logs').classList.add('hidden');
+        document.getElementById('tab-btn-items').className = "py-3 px-6 font-bold text-sm border-b-2 border-blue-600 text-blue-600 transition";
+        document.getElementById('tab-btn-logs').className = "py-3 px-6 font-bold text-sm border-b-2 border-transparent text-gray-500 hover:text-gray-700 transition";
+      } else {
+        document.getElementById('tab-content-items').classList.add('hidden');
+        document.getElementById('tab-content-logs').classList.remove('hidden');
+        document.getElementById('tab-btn-items').className = "py-3 px-6 font-bold text-sm border-b-2 border-transparent text-gray-500 hover:text-gray-700 transition";
+        document.getElementById('tab-btn-logs').className = "py-3 px-6 font-bold text-sm border-b-2 border-blue-600 text-blue-600 transition";
+      }
+    }
+
+    function openMasterModal() {
+      const list = document.getElementById('master-items-list');
+      list.innerHTML = '';
+      itemsMaster.forEach((item, index) => {
+        const div = document.createElement('div');
+        div.className = "flex items-center gap-2 p-2 bg-gray-50 rounded-lg text-xs";
+        div.innerHTML = `
+          <input type="text" value="${item.name}" onchange="updateMaster(${index}, 'name', this.value)" class="flex-1 p-1.5 border rounded font-bold">
+          <input type="number" value="${item.reorderPoint}" onchange="updateMaster(${index}, 'reorderPoint', parseInt(this.value,10))" class="w-16 p-1.5 border rounded text-right" title="発注点">
+          <input type="number" value="${item.defaultOrderQty}" onchange="updateMaster(${index}, 'defaultOrderQty', parseInt(this.value,10))" class="w-16 p-1.5 border rounded text-right" title="標準発注数">
+        `;
+        list.appendChild(div);
+      });
+      document.getElementById('modal-master').classList.remove('hidden');
+    }
+
+    function updateMaster(index, key, val) {
+      itemsMaster[index][key] = val;
+      saveData();
+      renderItems();
+    }
+
+    function closeMasterModal() {
+      document.getElementById('modal-master').classList.add('hidden');
+    }
+
+    function exportCSV() {
+      let csv = '日付,商品名,区分,数量,担当者\n';
+      logs.forEach(l => {
+        csv += `${l.date},${l.itemName},${l.type},${l.qty || 0},${l.user}\n`;
+      });
+      const blob = new Blob([new Uint8Array([0xEF, 0xBB, 0xBF]), csv], { type: 'text/csv;charset=utf-8;' });
+      const link = document.createElement('a');
+      link.href = URL.createObjectURL(blob);
+      link.download = `入出庫ログ_${getTodayString().replace(/\//g,'')}.csv`;
+      link.click();
+    }
+
+    // 初期化実行
+    renderItems();
+    renderLogs();
+  </script>
+</body>
+</html>
