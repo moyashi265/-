@@ -43,6 +43,18 @@
 
     <!-- 1. 現在庫一覧タブ -->
     <div id="tab-content-items" class="space-y-4">
+      <!-- 検索・フィルターバー -->
+      <div class="bg-white p-4 rounded-2xl shadow-sm flex flex-col md:flex-row gap-3">
+        <div class="flex-1">
+          <input type="text" id="search-keyword" placeholder="🔍 商品名で検索..." oninput="renderItems()" class="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none">
+        </div>
+        <div class="w-full md:w-48">
+          <select id="filter-category" onchange="renderItems()" class="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none">
+            <option value="">すべてのカテゴリ</option>
+          </select>
+        </div>
+      </div>
+
       <div id="item-cards-container" class="grid grid-cols-1 md:grid-cols-2 gap-4">
         <!-- 動的カード挿入エリア -->
       </div>
@@ -110,7 +122,7 @@
         <button onclick="addNewMasterItem()" class="w-full py-1.5 bg-blue-600 text-white font-bold text-xs rounded-lg hover:bg-blue-700">追加する</button>
       </div>
 
-      <div class="text-xs font-bold text-gray-500 mb-2">登録済み商品一覧（編集・削除）</div>
+      <div class="text-xs font-bold text-gray-500 mb-2">登録済み商品一覧（カテゴリ・編集・削除）</div>
       <div id="master-items-list" class="space-y-3 mb-6">
         <!-- マスタ動的生成 -->
       </div>
@@ -157,12 +169,46 @@
       return '適正';
     }
 
+    function updateCategoryDropdown() {
+      const select = document.getElementById('filter-category');
+      const currentVal = select.value;
+      
+      // ユニークなカテゴリリストを抽出
+      const categories = [...new Set(itemsMaster.map(i => i.category || '未分類'))];
+      
+      select.innerHTML = '<option value="">すべてのカテゴリ</option>';
+      categories.forEach(cat => {
+        const opt = document.createElement('option');
+        opt.value = cat;
+        opt.textContent = cat;
+        if (cat === currentVal) opt.selected = true;
+        select.appendChild(opt);
+      });
+    }
+
     function renderItems() {
+      updateCategoryDropdown();
+      const keyword = document.getElementById('search-keyword').value.toLowerCase();
+      const selectedCategory = document.getElementById('filter-category').value;
+
       const container = document.getElementById('item-cards-container');
       container.innerHTML = '';
       let hasAlert = false;
 
-      itemsMaster.forEach(item => {
+      // 検索・カテゴリでフィルタリング
+      const filteredItems = itemsMaster.filter(item => {
+        const matchKeyword = item.name.toLowerCase().includes(keyword);
+        const itemCat = item.category || '未分類';
+        const matchCategory = !selectedCategory || itemCat === selectedCategory;
+        return matchKeyword && matchCategory;
+      });
+
+      if (filteredItems.length === 0) {
+        container.innerHTML = `<div class="col-span-full p-8 text-center text-gray-400 text-sm bg-white rounded-2xl shadow-sm">該当する商品が見つかりません</div>`;
+        return;
+      }
+
+      filteredItems.forEach(item => {
         const stock = calculateStock(item.name);
         const status = getItemStatus(item);
 
@@ -177,7 +223,7 @@
         card.innerHTML = `
           <div>
             <div class="flex justify-between items-start mb-2">
-              <span class="text-xs px-2 py-1 bg-gray-100 text-gray-600 rounded-md font-semibold">${item.category}</span>
+              <span class="text-xs px-2 py-1 bg-gray-100 text-gray-600 rounded-md font-semibold">${item.category || '未分類'}</span>
               <span class="text-xs px-2.5 py-1 rounded-full font-bold ${badgeClass}">${status}</span>
             </div>
             <h3 class="text-lg font-bold text-gray-800 mb-1">${item.name}</h3>
@@ -243,7 +289,6 @@
       return `${y}/${m}/${d}`;
     }
 
-    // 出庫ボタンの確認処理
     function handleQuickDecrement(itemName) {
       if (!confirm(`【出庫確認】\n「${itemName}」を 1個出庫しますか？`)) return;
       logs.push({
@@ -259,7 +304,6 @@
       renderLogs();
     }
 
-    // 発注ボタンの確認処理
     function handleOrdering(itemName) {
       if (!confirm(`【発注確認】\n「${itemName}」を発注しますか？`)) return;
       logs.push({
@@ -275,10 +319,8 @@
       renderLogs();
     }
 
-    // 入庫（入荷）ボタンの確認＆モーダル表示
     function openIntakeModal(itemName) {
       currentTargetItem = itemsMaster.find(i => i.name === itemName);
-      if (!confirm(`【入庫確認】\n「${itemName}」の入庫（入荷）登録を行いますか？`)) return;
       document.getElementById('modal-intake-title').innerText = `${itemName} の入庫登録`;
       document.getElementById('intake-qty-input').value = currentTargetItem ? currentTargetItem.defaultOrderQty : 10;
       document.getElementById('modal-intake').classList.remove('hidden');
@@ -292,6 +334,8 @@
       const qty = parseInt(document.getElementById('intake-qty-input').value, 10);
       const user = document.getElementById('intake-user-input').value || '担当者';
       if (qty > 0 && currentTargetItem) {
+        if (!confirm(`【入庫確認】\n「${currentTargetItem.name}」を ${qty} 個 入荷（入庫）しますか？`)) return;
+
         logs.push({
           id: Date.now(),
           date: getTodayString(),
@@ -335,17 +379,25 @@
       document.getElementById('modal-master').classList.remove('hidden');
     }
 
+    // マスタ編集一覧にカテゴリの表示・編集欄を追加
     function renderMasterList() {
       const list = document.getElementById('master-items-list');
       list.innerHTML = '';
       itemsMaster.forEach((item, index) => {
         const div = document.createElement('div');
-        div.className = "flex items-center gap-2 p-2 bg-gray-50 rounded-lg text-xs";
+        div.className = "flex flex-col gap-1.5 p-3 bg-gray-50 rounded-xl text-xs border border-gray-100";
         div.innerHTML = `
-          <input type="text" value="${item.name}" onchange="updateMaster(${index}, 'name', this.value)" class="flex-1 p-1.5 border rounded font-bold">
-          <input type="number" value="${item.reorderPoint}" onchange="updateMaster(${index}, 'reorderPoint', parseInt(this.value,10))" class="w-14 p-1.5 border rounded text-right" title="発注点">
-          <input type="number" value="${item.defaultOrderQty}" onchange="updateMaster(${index}, 'defaultOrderQty', parseInt(this.value,10))" class="w-14 p-1.5 border rounded text-right" title="標準発注数">
-          <button onclick="deleteMasterItem(${index})" class="text-red-500 hover:text-red-700 font-bold px-1">✕</button>
+          <div class="flex gap-2">
+            <input type="text" value="${item.name}" onchange="updateMaster(${index}, 'name', this.value)" class="flex-1 p-1.5 border rounded font-bold bg-white" placeholder="商品名">
+            <input type="text" value="${item.category || ''}" onchange="updateMaster(${index}, 'category', this.value)" class="w-28 p-1.5 border rounded bg-white" placeholder="カテゴリ">
+          </div>
+          <div class="flex items-center gap-2">
+            <span class="text-gray-500 text-[10px]">発注点:</span>
+            <input type="number" value="${item.reorderPoint}" onchange="updateMaster(${index}, 'reorderPoint', parseInt(this.value,10))" class="w-16 p-1.5 border rounded text-right bg-white">
+            <span class="text-gray-500 text-[10px]">標準発注:</span>
+            <input type="number" value="${item.defaultOrderQty}" onchange="updateMaster(${index}, 'defaultOrderQty', parseInt(this.value,10))" class="w-16 p-1.5 border rounded text-right bg-white">
+            <button onclick="deleteMasterItem(${index})" class="ml-auto text-red-500 hover:text-red-700 font-bold px-2 py-1 bg-white border rounded">削除</button>
+          </div>
         `;
         list.appendChild(div);
       });
