@@ -81,7 +81,7 @@
 
   </div>
 
-  <!-- 汎用アクション（出庫・発注・入庫）数量入力モーダル -->
+  <!-- 汎用アクション（出庫・発注・入荷）数量入力モーダル -->
   <div id="modal-action" class="fixed inset-0 bg-black/50 backdrop-blur-sm hidden flex items-center justify-center p-4 z-50">
     <div class="bg-white rounded-2xl max-w-sm w-full p-6 shadow-2xl">
       <h3 class="text-lg font-bold text-gray-800 mb-1" id="modal-action-title">数量登録</h3>
@@ -148,7 +148,7 @@
     ];
 
     let currentTargetItem = null;
-    let currentActionType = null; // '出庫' | '発注' | '入荷'
+    let currentActionType = null;
 
     function saveData() {
       localStorage.setItem('app_items_master', JSON.stringify(itemsMaster));
@@ -226,7 +226,6 @@
             </div>
             <h3 class="text-lg font-bold text-gray-800 mb-1">${item.name}</h3>
             
-            <!-- 在庫数・発注点・標準発注数の表示 -->
             <div class="flex flex-col gap-1 mb-4">
               <div class="flex items-baseline gap-2">
                 <span class="text-3xl font-extrabold text-gray-900">${stock}</span>
@@ -296,7 +295,6 @@
       return `${y}/${m}/${d}`;
     }
 
-    // 共通アクションモーダルを開く（出庫・発注・入荷）
     function openActionModal(type, itemName) {
       currentActionType = type;
       currentTargetItem = itemsMaster.find(i => i.name === itemName);
@@ -308,7 +306,7 @@
       titleEl.innerText = `${itemName} の${type}登録`;
 
       if (type === '出庫') {
-        qtyInput.value = 1; // デフォルト出庫数 1
+        qtyInput.value = 1;
         submitBtn.innerText = '出庫する';
         submitBtn.className = "flex-1 py-2 bg-rose-600 text-white text-sm font-bold rounded-lg hover:bg-rose-700";
       } else if (type === '発注') {
@@ -328,7 +326,6 @@
       document.getElementById('modal-action').classList.add('hidden');
     }
 
-    // モーダル内で数量を確認して確定
     function submitAction() {
       const qty = parseInt(document.getElementById('action-qty-input').value, 10);
       const user = document.getElementById('action-user-input').value || '担当者';
@@ -380,7 +377,14 @@
       }
     }
 
+    // ★ マスタ編集にパスワード認証を追加
     function openMasterModal() {
+      const password = prompt('マスタ編集のパスワードを入力してください：');
+      if (password === null) return; // キャンセル時
+      if (password !== '19911012') {
+        alert('パスワードが間違っています。');
+        return;
+      }
       renderMasterList();
       document.getElementById('modal-master').classList.remove('hidden');
     }
